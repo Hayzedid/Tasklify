@@ -1,12 +1,22 @@
 import { StatusBar } from 'expo-status-bar';
-import { FlatList, ScrollView, StyleSheet,  TextInput,  View ,Text } from 'react-native';
+import { FlatList, ScrollView, StyleSheet,  TextInput,  View ,Text , LayoutAnimation} from 'react-native';
 import { Link } from 'expo-router';
 import { ItemList } from '@/components/ALLTASKS';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getFromStorage, saveToStorage } from '@/utils/storage';
+import * as Haptics from 'expo-haptics';
+
+
+const storageKey = 'item-List';
+
+
+
 type itemListType = {
   id: string;
   name: string;
   isCompleted?: boolean;
+  completedonTimeStamp?: number;
+  lastUpdatedTimestamp?: number;
 };
 // const initialState: itemListType[] = [
 //   { id: '1', name: 'Coffee', isCompleted: true },
@@ -17,17 +27,66 @@ type itemListType = {
 //   { id: '6', name: 'Omi tutu' },
 // ];
 export default function App() {
-  const [itemList, setItemList] = useState<itemListType[]>([]);
+  const [itemList, setitemList] = useState<itemListType[]>([]);
   const [value, setValue] = useState('');
+
+useEffect(() => {
+  const fetchInitial = async () => {
+    const data = await getFromStorage(storageKey);
+    if (data) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      setitemList(data);
+    }
+  };
+  fetchInitial();
+},[]);
+
+
+
   const handleSubmit = () => {if (value) {
     const newItem: itemListType = {
       id: Math.random().toString(),
       name: value,
       isCompleted: false,
+      
     };
-    setItemList((prev) => [...prev, newItem]);
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setitemList((prev) => [...prev, newItem]);
+    saveToStorage(storageKey, itemList);
     setValue('');
   }}
+
+  const handleDelete = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setitemList((prev) => prev.filter((item) => item.id !== id));
+    saveToStorage(storageKey, itemList);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+  const handleComplete = (id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setitemList((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          if (item.completedonTimeStamp) { 
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          } else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+
+          if (!item.isCompleted) {
+            return { ...item, isCompleted: true, completedonTimeStamp: Date.now() };
+          } else {
+            return { ...item, isCompleted: false, completedonTimeStamp: undefined };
+          }
+        }
+        return item;
+      })
+    );
+    saveToStorage(storageKey, itemList);
+  };
+  
+
+  
   return (
 <FlatList
   style={styles.container}
@@ -49,9 +108,8 @@ export default function App() {
     />
   }
   data={itemList}
-  keyExtractor={(item) => item.id}
   renderItem={({ item }) => (
-    <ItemList name={item.name} isCompleted={item.isCompleted} />
+    <ItemList name={item.name} isCompleted={item.isCompleted} onDelete={() => handleDelete(item.id)} onToggle={() => {handleComplete(item.id)}} />
   )}
 />
   );
